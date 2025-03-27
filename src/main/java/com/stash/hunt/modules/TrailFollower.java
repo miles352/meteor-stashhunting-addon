@@ -29,8 +29,13 @@ import xaeroplus.module.impl.PaletteNewChunks;
 import java.time.Duration;
 import java.util.ArrayDeque;
 
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.block.entity.ShulkerBoxBlockEntity;
+
 import static com.stash.hunt.Utils.positionInDirection;
 import static com.stash.hunt.Utils.sendWebhook;
+
 
 public class TrailFollower extends Module
 {
@@ -200,6 +205,14 @@ public class TrailFollower extends Module
         .build()
     );
 
+    public final Setting<Boolean> stashWebhookCoords = sgGeneral.add(new BoolSetting.Builder()
+        .name("Include Coordinates For Stash Found")
+        .description("If enabled, adds coordinates to the Discord webhook when a stash is found.")
+        .defaultValue(true)
+        .build()
+    );
+
+
     public final Setting<Integer> baritoneUpdateTicks = sgAdvanced.add(new IntSetting.Builder()
         .name("[Baritone] Baritone Path Update Ticks")
         .description("The amount of ticks between updates to the baritone goal. Low values may cause high instability.")
@@ -222,6 +235,7 @@ public class TrailFollower extends Module
     private FollowMode followMode;
 
     private boolean followingTrail = false;
+    private boolean stashReported = false;
 
     private ArrayDeque<Vec3d> trail = new ArrayDeque<>();
     private ArrayDeque<Vec3d> possibleTrail = new ArrayDeque<>();
@@ -335,6 +349,8 @@ public class TrailFollower extends Module
         XaeroPlus.EVENT_BUS.unregister(this);
         trail.clear();
         // If follow mode was never set due to baritone not being present, etc.
+        stashReported = false;
+        //
         if (followMode == null) return;
         switch (followMode)
         {
@@ -369,6 +385,48 @@ public class TrailFollower extends Module
             log("Circling to look for new chunks, abandoning trail in " + (trailTimeout.get() - (System.currentTimeMillis() - lastFoundTrailTime)) / 1000 + " seconds.");
         }
     }
+
+    private void checkForStashInView() {
+        if (mc.world == null || mc.player == null) return;
+
+        int chests = 0;
+        int shulkers = 0;
+
+        // if a stash is detected while TrailFollower is enabled and webhook is added it will alert you through discord
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                WorldChunk chunk = (WorldChunk) mc.world.getChunk(mc.player.getChunkPos().x + dx, mc.player.getChunkPos().z + dz);
+                for (BlockEntity be : chunk.getBlockEntities().values()) {
+                    if (be instanceof ChestBlockEntity) chests++;
+                    else if (be instanceof ShulkerBoxBlockEntity) shulkers++;
+                }
+            }
+        }
+
+        // only if coordinates are enabled for your discord webhook alerts
+        if (!stashReported && (chests >= 6 || shulkers >= 3)) {
+            String coords = stashWebhookCoords.get() && mc.player != null
+                ? " | Coords: " + mc.player.getBlockPos().toShortString()
+                : "";
+
+
+
+            log("Stash Found! " + chests + " chests, " + shulkers + " shulkers." + coords);
+
+            if (!webhookLink.get().isEmpty()) {
+                sendWebhook(webhookLink.get(), "Stash Found!",
+                    chests + " chests, " + shulkers + " shulkers in render distance." + coords,
+                    null,
+                    mc.player.getGameProfile().getName());
+            }
+
+            stashReported = true;
+        }
+    }
+
+
+
+
 
     @EventHandler
     private void onTick(TickEvent.Post event)
@@ -457,6 +515,10 @@ public class TrailFollower extends Module
                 break;
             }
         }
+
+        // will only check for stash after handling trail logic
+        checkForStashInView();
+
 
     }
 
