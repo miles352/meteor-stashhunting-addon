@@ -210,11 +210,9 @@ public class OldChunkNotifier extends Module {
                 String discordID = !ping.get() || discordId.get().isBlank() ? null : discordId.get();
                 new Thread(() -> sendWebhook(webhookLink.get(), "Old Chunk Detected", finalMessage + " at " + mc.player.getPos().toString(), discordID, mc.player.getGameProfile().getName())).start();
                 if (autoLog.get()) {
-                    mc.execute(() -> {
-                        if (mc.getNetworkHandler() != null) {
-                            mc.getNetworkHandler().getConnection().disconnect(Text.literal("Chunk trail detected."));
-                        }
-                    });
+                    if (mc.getNetworkHandler() != null) {
+                        mc.getNetworkHandler().getConnection().disconnect(Text.literal("Chunk trail detected."));
+                    }
                 }
             }
         }
