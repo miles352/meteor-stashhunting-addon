@@ -32,8 +32,7 @@ public class OldChunkNotifier extends Module {
     private long lastResetTime = System.currentTimeMillis();
     private static final int CHUNK_RESET_INTERVAL = 3000;
     private static final int CHUNK_TRIGGER_THRESHOLD = 3;
-
-
+    // changed anyChunks boolean to a chunkType enum
     private final Setting<ChunkType> chunkType = sgGeneral.add(new EnumSetting.Builder<ChunkType>()
         .name("Chunk Type")
         .description("Which chunk type to receive notifications for")
@@ -89,7 +88,7 @@ public class OldChunkNotifier extends Module {
         .visible(() -> logType.get() == LogType.Webhook || logType.get() == LogType.Both)
         .build()
     );
-
+    // added an auto-log option upon chunk detection
     private final Setting<Boolean> autoLog = sgGeneral.add(new BoolSetting.Builder()
         .name("Trail AutoLog")
         .description("Automatically disconnects when a chunk trail is detected.")
@@ -176,7 +175,7 @@ public class OldChunkNotifier extends Module {
         if (chunkType.get() == ChunkType.V1_12 && !is112OldChunk) return;
         if (chunkType.get() == ChunkType.V1_19_PLUS && is119NewChunk) return;
 
-        // prevent webhook spam for trail detection (won't affect off-highway trail notifications)
+        // prevents a lot of chunk-trail false positive notifications using a small chunk threshold (won't affect off-highway trail notifications)
         if (!notifyOffHighway.get()) {
             long currentTime = System.currentTimeMillis();
             if (currentTime - lastResetTime > CHUNK_RESET_INTERVAL) {
