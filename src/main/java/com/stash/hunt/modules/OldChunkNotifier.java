@@ -3,6 +3,7 @@ package com.stash.hunt.modules;
 import com.stash.hunt.Addon;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import xaero.hud.minimap.BuiltInHudModules;
@@ -24,12 +25,18 @@ import static com.stash.hunt.Utils.*;
 
 public class OldChunkNotifier extends Module {
 
+    // Trigger if CHUNK_TRIGGER_THRESHOLD old chunks are detected within
+    // CHUNK_RESET_INTERVAL ms, decrease spam + decrease false positives
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
-
-    private final Setting<Boolean> notifyAnyChunks = sgGeneral.add(new BoolSetting.Builder()
-        .name("Notify Any Chunks")
-        .description("Whether to notify you of any old chunks.")
-        .defaultValue(false)
+    private int oldChunkCount = 0;
+    private long lastResetTime = System.currentTimeMillis();
+    private static final int CHUNK_RESET_INTERVAL = 3000;
+    private static final int CHUNK_TRIGGER_THRESHOLD = 3;
+    // changed anyChunks boolean to a chunkType enum
+    private final Setting<ChunkType> chunkType = sgGeneral.add(new EnumSetting.Builder<ChunkType>()
+        .name("Chunk Type")
+        .description("Which chunk type to receive notifications for")
+        .defaultValue(ChunkType.V1_12)
         .build()
     );
 
@@ -81,6 +88,13 @@ public class OldChunkNotifier extends Module {
         .visible(() -> logType.get() == LogType.Webhook || logType.get() == LogType.Both)
         .build()
     );
+    // added an auto-log option upon chunk detection
+    private final Setting<Boolean> autoLog = sgGeneral.add(new BoolSetting.Builder()
+        .name("Trail AutoLog")
+        .description("Automatically disconnects when a chunk trail is detected.")
+        .defaultValue(false)
+        .build()
+    );
 
     private final Setting<String> discordId = sgGeneral.add(new StringSetting.Builder()
         .name("Discord ID")
@@ -92,6 +106,23 @@ public class OldChunkNotifier extends Module {
 
     public OldChunkNotifier() {
         super(Addon.CATEGORY, "OldChunkNotifier", "Sends a webhook message and optionally pings you when an old chunk is detected.");
+    }
+
+    public enum ChunkType {
+        V1_12("1.12 Chunks"),
+        V1_19_PLUS("1.19+ Chunks");
+
+
+        private final String label;
+
+        ChunkType(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 
     @Override
@@ -141,7 +172,24 @@ public class OldChunkNotifier extends Module {
 
         if (is119NewChunk && !is112OldChunk) return;
 
-        if (notifyAnyChunks.get())
+        if (chunkType.get() == ChunkType.V1_12 && !is112OldChunk) return;
+        if (chunkType.get() == ChunkType.V1_19_PLUS && is119NewChunk) return;
+
+        // prevents a lot of chunk-trail false positive notifications using a small chunk threshold (won't affect off-highway trail notifications)
+        if (!notifyOffHighway.get()) {
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastResetTime > CHUNK_RESET_INTERVAL) {
+                oldChunkCount = 0;
+                lastResetTime = currentTime;
+            }
+            oldChunkCount++;
+            if (oldChunkCount < CHUNK_TRIGGER_THRESHOLD) return;
+
+            oldChunkCount = 0;
+            lastResetTime = currentTime;
+        }
+
+
         {
             if (logType.get() == LogType.Both || logType.get() == LogType.Marker)
             {
@@ -151,16 +199,21 @@ public class OldChunkNotifier extends Module {
             {
                 String message = "";
                 if (is112OldChunk && !is119NewChunk) {
-                    message = "1.12 Followed in 1.19+ Old Chunk Detected";
+                    message = "1.12 Followed in 1.19+ Chunk Detected";
                 } else if (is112OldChunk && is119NewChunk) {
-                    message = "1.12 Unfollowed in 1.19+ Old Chunk Detected";
+                    message = "1.12 Unfollowed in 1.19+ Chunk Detected";
                 } else {
-                    message = "1.19+ Old Chunk Detected";
+                    message = "1.19+ Chunk Detected";
                 }
                 String finalMessage = message; // must be final for thread operations
                 // use threads so if a ton of chunks come at once it doesnt lag the game
                 String discordID = !ping.get() || discordId.get().isBlank() ? null : discordId.get();
                 new Thread(() -> sendWebhook(webhookLink.get(), "Old Chunk Detected", finalMessage + " at " + mc.player.getPos().toString(), discordID, mc.player.getGameProfile().getName())).start();
+                if (autoLog.get()) {
+                    if (mc.getNetworkHandler() != null) {
+                        mc.getNetworkHandler().getConnection().disconnect(Text.literal("Chunk trail detected."));
+                    }
+                }
             }
         }
 
