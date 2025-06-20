@@ -148,6 +148,14 @@ public class ElytraFlyPlusPlus extends Module {
         .build()
     );
 
+    private final Setting<Boolean> autoYReset = sgObstaclePasser.add(new BoolSetting.Builder()
+        .name("Auto Y Level Reset")
+        .description("Resets Y level and resets obstacle passer.")
+        .defaultValue(false)
+        .visible(() -> bounce.get() && highwayObstaclePasser.get())
+        .build()
+    );
+
     private final Setting<Boolean> avoidPortalTraps = sgObstaclePasser.add(new BoolSetting.Builder()
         .name("Avoid Portal Traps")
         .description("Will attempt to detect portal traps on chunk load and avoid them.")
@@ -327,10 +335,23 @@ public class ElytraFlyPlusPlus extends Module {
 
     private boolean waitingForChunksToLoad;
 
+    // auto y reset variables
+    private double lastStableY = -1;
+    private final int deviationThreshold = 1; // number block deviation
+    private boolean yJustReset = false;
+    private int yJustResetCooldown = 3;
+
     @EventHandler
     private void onTick(TickEvent.Pre event)
     {
         if (mc.player == null || mc.player.getAbilities().allowFlying) return;
+        // only for y reset bool! (refresh y value upon activation)
+        if (autoYReset.get() && lastStableY == -1) {
+            lastStableY = mc.player.getY();
+            yJustReset = false;
+            yJustResetCooldown = 0;
+        }
+        runAutoYReset();
 
         if (toggleElytra.get() && !elytraToggled)
         {
@@ -373,17 +394,19 @@ public class ElytraFlyPlusPlus extends Module {
             else if (tempPath != null)
             {
                 BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalBlock(tempPath));
+                runAutoYReset();
                 return;
             }
 
             // if still pathing, wait for that to complete
             if (highwayObstaclePasser.get() && BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().getGoal() != null)
             {
-                return;
+                runAutoYReset();
+                if (!yJustReset) return;
             }
 
             // Length check to fix weird issue where goal gets set to 0 0 when going through queue, even though it gets reset. Likely due to bad connection.
-            if (highwayObstaclePasser.get() && mc.player.getPos().length() > 100 && (mc.player.getY() < targetY.get()
+            if (!yJustReset && highwayObstaclePasser.get() && mc.player.getPos().length() > 100 && (mc.player.getY() < targetY.get()
                 || mc.player.getY() > targetY.get() + 2
                 || mc.player.horizontalCollision)
                 || portalTrap != null && portalTrap.getSquaredDistance(mc.player.getBlockPos()) < portalAvoidDistance.get() * portalAvoidDistance.get()
@@ -471,6 +494,11 @@ public class ElytraFlyPlusPlus extends Module {
                 ClientCommandC2SPacket.Mode.START_FALL_FLYING
             ));
         }
+        if (yJustResetCooldown > 0) {
+            yJustResetCooldown--;
+        } else {
+            yJustReset = false;
+        }
     }
 
     public boolean enabled()
@@ -523,6 +551,28 @@ public class ElytraFlyPlusPlus extends Module {
             }
         }
     }
+
+    private void runAutoYReset() {
+        if (!autoYReset.get()) return;
+
+        double currentY = mc.player.getY();
+        if (lastStableY == -1) {
+            lastStableY = currentY;
+            return;
+        }
+        // reset Y level and baritone path
+        if (Math.abs(currentY - lastStableY) >= deviationThreshold) {
+            info("Y-Level reset due to vertical deviation: " + (int) currentY);
+            targetY.set((int) currentY);
+            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoal(null); // clear goal on tick
+            paused = false;
+            tempPath = null;
+            lastStableY = currentY;
+            yJustReset = true;
+            return;
+        }
+    }
+
 
     @EventHandler
     private void onInteractItem(InteractItemEvent event) {
