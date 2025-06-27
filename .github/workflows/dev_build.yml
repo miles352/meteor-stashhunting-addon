@@ -2,36 +2,36 @@ name: Publish Development Build
 on:
     push:
         branches:
-            - "1.21.1"
+            - "1.21.4"
 
 env:
-  MINECRAFT_VERSION: "1.21.1"
+    MINECRAFT_VERSION: "1.21.4"
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-java@v2
-        with:
-          java-version: 21
-          distribution: adopt
-      - name: Build
-        run: ./gradlew build
-      - name: Extract Mod Version
-        run: |
-             VERSION=$(grep "mod_version" gradle.properties | cut -d'=' -f2)
-             echo "VERSION=$VERSION" >> $GITHUB_ENV
-      - name: Get Fabric Jar Filename
-        run: echo "NAME=jefff-mod-${{ env.VERSION }}-${{ env.MINECRAFT_VERSION }}" >> $GITHUB_ENV
-      - name: Rename Output File
-        run: mv ./build/libs/*.jar ./build/libs/${{ env.NAME }}.jar
-      - name: Release
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          makeLatest: true
-          commit: ${{ env.MINECRAFT_VERSION }}
-          tag: ${{ env.VERSION }}
-          artifacts: |
-            ./build/libs/*.jar
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - uses: actions/setup-java@v2
+              with:
+                  java-version: 21
+                  distribution: adopt
+            - name: Build
+              run: ./gradlew build
+            - name: Extract Mod Version
+              run: |
+                  VERSION=$(grep "mod_version" gradle.properties | cut -d'=' -f2)
+                  echo "VERSION=$VERSION" >> $GITHUB_ENV
+            - name: Get Fabric Jar Filename
+              run: echo "NAME=jefff-mod-${{ env.VERSION }}-${{ env.MINECRAFT_VERSION }}" >> $GITHUB_ENV
+            - name: Rename Output File
+              run: mv ./build/libs/*.jar ./build/libs/${{ env.NAME }}.jar
+            - name: Release
+              uses: ncipollo/release-action@v1
+              with:
+                  allowUpdates: true
+                  makeLatest: true
+                  commit: ${{ env.MINECRAFT_VERSION }}
+                  tag: ${{ env.VERSION }}
+                  artifacts: |
+                      ./build/libs/*.jar

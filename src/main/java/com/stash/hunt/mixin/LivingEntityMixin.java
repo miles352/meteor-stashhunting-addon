@@ -36,8 +36,8 @@ public abstract class LivingEntityMixin
         }
     }
 
-    @Inject(at = @At("HEAD"), method = "Lnet/minecraft/entity/LivingEntity;isFallFlying()Z", cancellable = true)
-    private void isFallFlying(CallbackInfoReturnable<Boolean> cir)
+    @Inject(at = @At("HEAD"), method = "Lnet/minecraft/entity/LivingEntity;isGliding()Z", cancellable = true)
+    private void isGliding(CallbackInfoReturnable<Boolean> cir)
     {
         if (mc.player != null && mc.player.getBrain().equals(this.getBrain()) && efly != null && efly.enabled())
         {

@@ -35,7 +35,7 @@ public class AFKVanillaFly extends Module {
         launched = false;
         yTarget = -1;
 
-        if (mc.player == null || !mc.player.isFallFlying()) {
+        if (mc.player == null || !mc.player.isGliding()) {
             info("You must be flying before enabling AFKVanillaFly.");
         }
     }
@@ -45,7 +45,7 @@ public class AFKVanillaFly extends Module {
 
         double currentY = mc.player.getY();
 
-        if (mc.player.isFallFlying()) {
+        if (mc.player.isGliding()) {
             if (yTarget == -1 || !launched) {
                 yTarget = currentY;
                 launched = true;
