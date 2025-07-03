@@ -570,7 +570,6 @@ public class ElytraFlyPlusPlus extends Module {
         double deviation = Math.abs(currentY - lastStableY);
 
         if (deviation >= deviationThreshold) {
-            // New deviation detected
             if (lastDeviationY == -1 || currentY != lastDeviationY) {
                 lastDeviationY = currentY;
                 yDeviationTicks = 1;
