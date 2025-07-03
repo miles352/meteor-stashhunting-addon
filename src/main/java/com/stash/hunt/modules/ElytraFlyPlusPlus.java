@@ -595,9 +595,6 @@ public class ElytraFlyPlusPlus extends Module {
         }
     }
 
-
-
-
     @EventHandler
     private void onInteractItem(InteractItemEvent event) {
         if (!autoSwapElytra.get()) return;
