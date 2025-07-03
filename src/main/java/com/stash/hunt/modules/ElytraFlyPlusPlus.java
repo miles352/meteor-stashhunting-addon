@@ -340,6 +340,9 @@ public class ElytraFlyPlusPlus extends Module {
     private final int deviationThreshold = 1; // number block deviation
     private boolean yJustReset = false;
     private int yJustResetCooldown = 3;
+    private int yDeviationTicks = 0;
+    private double lastDeviationY = -1;
+    private final int yResetDelayTicks = 30; // 1.5 seconds @20tps (about 3 blocks w/ baritone)
 
     @EventHandler
     private void onTick(TickEvent.Pre event)
@@ -556,22 +559,44 @@ public class ElytraFlyPlusPlus extends Module {
         if (!autoYReset.get()) return;
 
         double currentY = mc.player.getY();
+
         if (lastStableY == -1) {
             lastStableY = currentY;
+            yDeviationTicks = 0;
+            lastDeviationY = -1;
             return;
         }
-        // reset Y level and baritone path
-        if (Math.abs(currentY - lastStableY) >= deviationThreshold) {
-            info("Y-Level reset due to vertical deviation: " + (int) currentY);
-            targetY.set((int) currentY);
-            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoal(null); // clear goal on tick
-            paused = false;
-            tempPath = null;
-            lastStableY = currentY;
-            yJustReset = true;
-            return;
+
+        double deviation = Math.abs(currentY - lastStableY);
+
+        if (deviation >= deviationThreshold) {
+            // New deviation detected
+            if (lastDeviationY == -1 || currentY != lastDeviationY) {
+                lastDeviationY = currentY;
+                yDeviationTicks = 1;
+            } else {
+                yDeviationTicks++;
+            }
+            // reset Y level and baritone path, updated for path measure
+            if (yDeviationTicks >= yResetDelayTicks) {
+                targetY.set((int) currentY);
+                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoal(null); // clear goal on tick
+                paused = false;
+                tempPath = null;
+                lastStableY = currentY;
+                yJustReset = true;
+                yJustResetCooldown = 3;
+                // reset
+                lastDeviationY = -1;
+                yDeviationTicks = 0;
+            }
+        } else {
+            lastDeviationY = -1;
+            yDeviationTicks = 0;
         }
     }
+
+
 
 
     @EventHandler
