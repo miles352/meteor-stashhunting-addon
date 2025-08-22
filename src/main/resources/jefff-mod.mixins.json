@@ -5,7 +5,9 @@
   "client": [
     "LivingEntityMixin",
     "EntityMixin",
-    "KeyBindingMixin"
+    "KeyBindingMixin",
+    "MouseMixin",
+    "CameraMixin"
   ],
   "injectors": {
     "defaultRequire": 1
