@@ -34,7 +34,7 @@ public class Addon extends MeteorAddon {
         Modules.get().add(new HighlightOldLava());
         Modules.get().add(new VanityESP());
         Modules.get().add(new AFKVanillaFly());
-        Modules.get().add(new AutoPortal());
+        Modules.get().add(new BetterAutoPortal());
         Modules.get().add(new Pitch40Util());
 //        Modules.get().add(new AutoTrade());
 //        Modules.get().add(new XPBot());

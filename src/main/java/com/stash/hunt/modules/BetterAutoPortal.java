@@ -21,7 +21,7 @@ import net.minecraft.util.math.Vec3d;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AutoPortal extends Module {
+public class BetterAutoPortal extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final List<BlockPos> waitingForBreak = new ArrayList<>();
 
@@ -72,7 +72,7 @@ public class AutoPortal extends Module {
     private int delay = 0;
     private int index = 0;
 
-    public AutoPortal() {
+    public BetterAutoPortal() {
         super(Addon.CATEGORY, "auto-portal", "For the Base Hunter who has places to be.");
     }
 
@@ -224,7 +224,7 @@ public class AutoPortal extends Module {
                     break;
                 }
             }
-            info("Portal complete. AutoPortal disabled.");
+            info("Portal complete. BetterAutoPortal disabled.");
             toggle();
         }
     }
