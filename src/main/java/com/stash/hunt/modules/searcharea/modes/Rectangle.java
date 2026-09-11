@@ -5,12 +5,12 @@ import com.stash.hunt.modules.searcharea.SearchAreaModes;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.misc.AutoReconnect;
-import meteordevelopment.meteorclient.systems.modules.movement.BoatFly;
+import meteordevelopment.meteorclient.systems.modules.movement.EntityControl;
 import meteordevelopment.meteorclient.utils.player.Rotations;
-import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.ClientboundDisconnectPacket;
+import net.minecraft.world.phys.Vec3;
 import java.io.*;
 
 import static meteordevelopment.meteorclient.utils.player.ChatUtils.info;
@@ -58,9 +58,9 @@ public class Rectangle extends SearchAreaMode
 
     private void printRectangleEstimate()
     {
-        Class<? extends Module> boatFly = BoatFly.class;
-        Module module = Modules.get().get(boatFly);
-        double speedBPS = (double)module.settings.get("speed").get();
+        Class<? extends Module> entityControl = EntityControl.class;
+        Module module = Modules.get().get(entityControl);
+        double speedBPS = (double)module.settings.get("horizontal-speed").get();
         double rowDistance = Math.abs(pd.initialPos.getX() - pd.targetPos.getX());
         int rowCount = Math.abs(pd.currPos.getZ() - pd.targetPos.getZ()) / 16 / searchArea.rowGap.get();
         double totalBlocks = rowCount * (rowDistance + (searchArea.rowGap.get() * 16));
@@ -83,32 +83,32 @@ public class Rectangle extends SearchAreaMode
 
         if (goingToStart)
         {
-            if (Math.sqrt(mc.player.getBlockPos().getSquaredDistance(pd.currPos.getX(), mc.player.getY(), pd.currPos.getZ())) < 5)
+            if (Math.sqrt(mc.player.blockPosition().distToLowCornerSqr(pd.currPos.getX(), mc.player.getY(), pd.currPos.getZ())) < 5)
             {
                 goingToStart = false;
-                mc.player.setVelocity(0, 0, 0);
+                mc.player.setDeltaMovement(0, 0, 0);
                 printRectangleEstimate();
             }
             else
             {
-                mc.player.setYaw((float) Rotations.getYaw(pd.currPos.toCenterPos()));
-                setPressed(mc.options.forwardKey, true);
+                mc.player.setYRot((float) Rotations.getYaw(Vec3.atCenterOf(pd.currPos)));
+                setPressed(mc.options.keyUp, true);
             }
             return;
         }
 
-        setPressed(mc.options.forwardKey, true);
-        mc.player.setYaw(pd.yawDirection);
-        if (Math.sqrt(mc.player.getBlockPos().getSquaredDistance(pd.targetPos.getX(), mc.player.getY(), pd.targetPos.getZ())) < 20) // end of rectangle
+        setPressed(mc.options.keyUp, true);
+        mc.player.setYRot(pd.yawDirection);
+        if (Math.sqrt(mc.player.blockPosition().distToLowCornerSqr(pd.targetPos.getX(), mc.player.getY(), pd.targetPos.getZ())) < 20) // end of rectangle
         {
-            setPressed(mc.options.forwardKey, false);
+            setPressed(mc.options.keyUp, false);
 //            path complete
             searchArea.toggle();
             if (searchArea.disconnectOnCompletion.get())
             {
                 var autoReconnect = Modules.get().get(AutoReconnect.class);
                 if (autoReconnect.isActive()) autoReconnect.toggle();
-                mc.player.networkHandler.onDisconnect(new DisconnectS2CPacket(Text.literal("[Search Area] Path is complete")));
+                mc.player.connection.handleDisconnect(new ClientboundDisconnectPacket(Component.literal("[Search Area] Path is complete")));
             }
         }//                                                                      if going in +X and currPos > the greater of the two sides of the rectangle
         else if (pd.mainPath && ((pd.yawDirection == -90.0f && mc.player.getX() >= (Math.max(pd.initialPos.getX(), pd.targetPos.getX())))) ||
@@ -116,14 +116,14 @@ public class Rectangle extends SearchAreaMode
         {
             pd.yawDirection = (mc.player.getZ() < pd.targetPos.getZ()) ? 0.0f : 180.0f;
             pd.mainPath = false;
-            mc.player.setVelocity(0, 0, 0);
+            mc.player.setDeltaMovement(0, 0, 0);
         }
         else if (!pd.mainPath && Math.abs(mc.player.getZ() - pd.lastCompleteRowZ) >= (16 * searchArea.rowGap.get())) // if the path to go past loaded chunks is done
         {
             pd.lastCompleteRowZ = (int)mc.player.getZ();
             pd.yawDirection = (pd.initialPos.getX() > mc.player.getX() ? -90.0f : 90.0f);
             pd.mainPath = true;
-            mc.player.setVelocity(0, 0, 0);
+            mc.player.setDeltaMovement(0, 0, 0);
         }
     }
 

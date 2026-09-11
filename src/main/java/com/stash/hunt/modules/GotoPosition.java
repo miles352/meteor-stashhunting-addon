@@ -7,10 +7,10 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.misc.input.Input;
 import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.ClientboundDisconnectPacket;
+import net.minecraft.world.phys.Vec3;
 
 
 public class GotoPosition extends Module
@@ -40,7 +40,7 @@ public class GotoPosition extends Module
     @Override
     public void onActivate()
     {
-        double distance = Math.sqrt(mc.player.getBlockPos().getSquaredDistance(target.get().getX(), mc.player.getY(), target.get().getZ()));
+        double distance = Math.sqrt(mc.player.blockPosition().distToLowCornerSqr(target.get().getX(), mc.player.getY(), target.get().getZ()));
         long totalSeconds = (long)(distance / 70);
         long hours = totalSeconds / 3600;
         long minutes = (totalSeconds % 3600) / 60;
@@ -51,9 +51,9 @@ public class GotoPosition extends Module
     @Override
     public void onDeactivate()
     {
-        mc.options.forwardKey.setPressed(false);
-        Input.setKeyState(mc.options.forwardKey, false);
-        mc.player.setVelocity(0, 0, 0);
+        mc.options.keyUp.setDown(false);
+        Input.setKeyState(mc.options.keyUp, false);
+        mc.player.setDeltaMovement(0, 0, 0);
     }
 
 //    @Override
@@ -72,20 +72,20 @@ public class GotoPosition extends Module
     @EventHandler
     private void onTick(TickEvent.Post event)
     {
-        if (Math.sqrt(mc.player.getBlockPos().getSquaredDistance(target.get().getX(), mc.player.getY(), target.get().getZ())) > 5)
+        if (Math.sqrt(mc.player.blockPosition().distToLowCornerSqr(target.get().getX(), mc.player.getY(), target.get().getZ())) > 5)
         {
-            mc.player.setYaw((float) Rotations.getYaw(new Vec3d(target.get().getX(), (int) mc.player.getY(), target.get().getZ())));
-            mc.options.forwardKey.setPressed(true);
-            Input.setKeyState(mc.options.forwardKey, true);
+            mc.player.setYRot((float) Rotations.getYaw(new Vec3(target.get().getX(), (int) mc.player.getY(), target.get().getZ())));
+            mc.options.keyUp.setDown(true);
+            Input.setKeyState(mc.options.keyUp, true);
         }
         else
         {
-            mc.options.forwardKey.setPressed(false);
-            Input.setKeyState(mc.options.forwardKey, false);
-            mc.player.setVelocity(0, 0, 0);
+            mc.options.keyUp.setDown(false);
+            Input.setKeyState(mc.options.keyUp, false);
+            mc.player.setDeltaMovement(0, 0, 0);
             if (disconnectOnComplete.get())
             {
-                mc.player.networkHandler.onDisconnect(new DisconnectS2CPacket(Text.literal("[GotoPosition] You are at your destination!")));
+                mc.player.connection.handleDisconnect(new ClientboundDisconnectPacket(Component.literal("[GotoPosition] You are at your destination!")));
             }
             target.reset();
             this.toggle();

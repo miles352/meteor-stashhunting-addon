@@ -15,10 +15,10 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import com.stash.hunt.Addon;
 import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import xaeroplus.module.ModuleManager;
 import xaeroplus.module.impl.Drawing;
 
@@ -49,7 +49,7 @@ public class TrailMaker extends Module
         super(Addon.CATEGORY, "trail-maker", "Allows you to plot xaero chunk highlights on the map and then follow them in order.");
     }
 
-    public RegistryKey<World> dimension;
+    public ResourceKey<Level> dimension;
     public final Queue<ChunkPos> points = new LinkedList<>();
     private boolean following = false;
 
@@ -109,24 +109,24 @@ public class TrailMaker extends Module
                 return;
             }
             ChunkPos goal = points.peek();
-            Vec3d centerBlockPos = goal.getCenterAtY((int) mc.player.getY()).toCenterPos();
+            Vec3 centerBlockPos = Vec3.atCenterOf(goal.getMiddleBlockPosition((int) mc.player.getY()));
 
-            if (dimension.equals(World.NETHER) && !mc.world.getRegistryKey().equals(World.NETHER))
+            if (dimension.equals(Level.NETHER) && !mc.level.dimension().equals(Level.NETHER))
             {
                 centerBlockPos = centerBlockPos.multiply(8.0, 1.0, 8.0);
             }
-            else if (mc.world.getRegistryKey().equals(World.NETHER) && !dimension.equals(World.NETHER))
+            else if (mc.level.dimension().equals(Level.NETHER) && !dimension.equals(Level.NETHER))
             {
                 centerBlockPos = centerBlockPos.multiply(1.0 / 8.0, 1.0, 1.0 / 8.0);
             }
 
             float targetYaw = (float) Rotations.getYaw(centerBlockPos);
-            mc.player.setYaw(Utils.smoothRotation(mc.player.getYaw(), targetYaw, rotationScaling.get()));
+            mc.player.setYRot(Utils.smoothRotation(mc.player.getYRot(), targetYaw, rotationScaling.get()));
 
-            if (mc.player.getPos().squaredDistanceTo(centerBlockPos) < 16 * 16)
+            if (mc.player.position().distanceToSqr(centerBlockPos) < 16 * 16)
             {
                 ChunkPos point = points.poll();
-                ModuleManager.getModule(Drawing.class).drawingCache.removeHighlight(point.x, point.z, dimension);
+                ModuleManager.getModule(Drawing.class).drawingCache.removeHighlight(point.x(), point.z(), dimension);
             }
         }
     }

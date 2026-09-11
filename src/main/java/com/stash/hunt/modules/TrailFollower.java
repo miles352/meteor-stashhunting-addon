@@ -5,6 +5,7 @@ import baritone.api.pathing.goals.GoalXZ;
 import com.stash.hunt.Addon;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.stash.hunt.NewerNewChunksData;
 import com.stash.hunt.Utils;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -16,14 +17,13 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
-import net.minecraft.item.Items;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.ClientboundDisconnectPacket;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
 import xaeroplus.XaeroPlus;
 import xaeroplus.event.ChunkDataEvent;
 import xaeroplus.module.ModuleManager;
@@ -85,7 +85,13 @@ public class TrailFollower extends Module
     public enum OverworldFlightMode {
         VANILLA,
         PITCH40,
+        BARITONE_ELYTRA,
         OTHER
+    }
+
+    public enum ChunkSource {
+        XaeroPlus,
+        NewerNewChunks
     }
 
     public enum NetherPathMode {
@@ -95,7 +101,7 @@ public class TrailFollower extends Module
 
     public final Setting<OverworldFlightMode> overworldFlightMode = sgGeneral.add(new EnumSetting.Builder<OverworldFlightMode>()
         .name("overworld-flight-mode")
-        .description("Choose how TrailFollower flies in Overworld. If other is selected then nothing will be automatically enabled, instead just your yaw will be changed to point towards the trail.")
+        .description("Choose how TrailFollower flies in Overworld. If other is selected then nothing will be automatically enabled, instead just your yaw will be changed to point towards the trail. Baritone elytra uses baritone to fly along the trail and requires baritone to be installed.")
         .defaultValue(OverworldFlightMode.PITCH40)
         .build()
     );
@@ -224,6 +230,13 @@ public class TrailFollower extends Module
         .build()
     );
 
+    public final Setting<ChunkSource> chunkSource = sgAdvanced.add(new EnumSetting.Builder<ChunkSource>()
+        .name("chunk-source")
+        .description("Which addon to use as the source of chunk detection. XaeroPlus requires the XaeroPlus New Chunks and Old Chunks modules enabled. NewerNewChunks reads live data from the Trouser-Streak NewerNewChunks addon if it is running, or its saved chunk data files as a fallback.")
+        .defaultValue(ChunkSource.XaeroPlus)
+        .build()
+    );
+
     public final Setting<Integer> chunkCacheLength = sgAdvanced.add(new IntSetting.Builder()
         .name("chunk-cache-length")
         .description("The amount of chunks to keep in the cache. (Won't be applied until deactivating)")
@@ -262,8 +275,8 @@ public class TrailFollower extends Module
 
     private boolean followingTrail = false;
 
-    private ArrayDeque<Vec3d> trail = new ArrayDeque<>();
-    private ArrayDeque<Vec3d> possibleTrail = new ArrayDeque<>();
+    private ArrayDeque<Vec3> trail = new ArrayDeque<>();
+    private ArrayDeque<Vec3> possibleTrail = new ArrayDeque<>();
 
     private long lastFoundTrailTime;
     private long lastFoundPossibleTrailTime;
@@ -274,6 +287,8 @@ public class TrailFollower extends Module
         .maximumSize(chunkCacheLength.get())
         .expireAfterWrite(Duration.ofMinutes(5))
         .build();
+
+    private final NewerNewChunksData newerNewChunksData = new NewerNewChunksData();
 
     // Credit to WarriorLost: https://github.com/WarriorLost/meteor-client/tree/master
 
@@ -297,21 +312,22 @@ public class TrailFollower extends Module
     {
         resetTrail();
         XaeroPlus.EVENT_BUS.register(this);
+        newerNewChunksData.init();
 
         if (started)
         {
-            if (mc.player != null && mc.world != null)
+            if (mc.player != null && mc.level != null)
             {
-                RegistryKey<World> currentDimension = mc.world.getRegistryKey();
+                ResourceKey<Level> currentDimension = mc.level.dimension();
                 if (oppositeDimension.get())
                 {
-                    if (currentDimension.equals(World.END))
+                    if (currentDimension.equals(Level.END))
                     {
                         info("There is no opposite dimension to the end. Disabling TrailFollower");
                         this.toggle();
                         return;
                     }
-                    else if (currentDimension.equals(World.NETHER))
+                    else if (currentDimension.equals(Level.NETHER))
                     {
                         info("Following overworld trails from the nether is not supported yet, sorry. Disabling TrailFollower");
                         this.toggle();
@@ -324,10 +340,25 @@ public class TrailFollower extends Module
                 }
                 else
                 {
-                    if (!currentDimension.equals(World.NETHER))
+                    if (!currentDimension.equals(Level.NETHER))
                     {
-                        followMode = FollowMode.YAWLOCK;
-                        info("You are in the overworld or end, basic yaw mode will be used.");
+                        if (overworldFlightMode.get() == OverworldFlightMode.BARITONE_ELYTRA)
+                        {
+                            try {
+                                Class.forName("baritone.api.BaritoneAPI");
+                                followMode = FollowMode.BARITONE;
+                                info("You are in the overworld or end, baritone elytra mode will be used.");
+                            } catch (ClassNotFoundException e) {
+                                info("Baritone is required to use baritone elytra. Disabling TrailFollower");
+                                this.toggle();
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            followMode = FollowMode.YAWLOCK;
+                            info("You are in the overworld or end, basic yaw mode will be used.");
+                        }
                     }
                     else
                     {
@@ -343,7 +374,7 @@ public class TrailFollower extends Module
                     }
                 }
 
-                if (followMode == FollowMode.YAWLOCK && !mc.world.getRegistryKey().equals(World.NETHER)) {
+                if (followMode == FollowMode.YAWLOCK && !mc.level.dimension().equals(Level.NETHER)) {
                     if (overworldFlightMode.get() == OverworldFlightMode.PITCH40) {
                         Class<? extends Module> pitch40Util = Pitch40Util.class;
                         Module pitch40UtilModule = Modules.get().get(pitch40Util);
@@ -364,13 +395,13 @@ public class TrailFollower extends Module
                     }
                 }
                 // set original pos to pathDistance blocks in the direction the player is facing
-                Vec3d offset = (new Vec3d(Math.sin(-mc.player.getYaw() * Math.PI / 180), 0, Math.cos(-mc.player.getYaw() * Math.PI / 180)).normalize()).multiply(pathDistance.get());
-                Vec3d targetPos = mc.player.getPos().add(offset);
+                Vec3 offset = (new Vec3(Math.sin(-mc.player.getYRot() * Math.PI / 180), 0, Math.cos(-mc.player.getYRot() * Math.PI / 180)).normalize()).scale(pathDistance.get());
+                Vec3 targetPos = mc.player.position().add(offset);
                 for (int i = 0; i < (maxTrailLength.get() * startDirectionWeighting.get()); i++)
                 {
                     trail.add(targetPos);
                 }
-                targetYaw = getActualYaw(mc.player.getYaw());
+                targetYaw = getActualYaw(mc.player.getYRot());
             }
             else
             {
@@ -401,7 +432,7 @@ public class TrailFollower extends Module
                 break;
             }
             case YAWLOCK: {
-                if (mc.world == null || mc.world.getRegistryKey().equals(World.NETHER)) return;
+                if (mc.level == null || mc.level.dimension().equals(Level.NETHER)) return;
                 if (overworldFlightMode.get() == OverworldFlightMode.VANILLA) {
                     AFKVanillaFly afkVanillaFly = Modules.get().get(AFKVanillaFly.class);
                     if (afkVanillaFly != null) {
@@ -428,8 +459,8 @@ public class TrailFollower extends Module
     private void circle()
     {
         if (followMode == FollowMode.BARITONE) return;
-        mc.player.setYaw(getActualYaw((float) (mc.player.getYaw() + circlingDegPerTick.get())));
-        if (mc.player.age % 100 == 0)
+        mc.player.setYRot(getActualYaw((float) (mc.player.getYRot() + circlingDegPerTick.get())));
+        if (mc.player.tickCount % 100 == 0)
         {
             log("Circling to look for new chunks, abandoning trail in " + (trailTimeout.get() - (System.currentTimeMillis() - lastFoundTrailTime)) / 1000 + " seconds.");
         }
@@ -443,7 +474,7 @@ public class TrailFollower extends Module
             started = true;
             onActivate();
         }
-        if (mc.player == null || mc.world == null) return;
+        if (mc.player == null || mc.level == null) return;
         if (followingTrail && System.currentTimeMillis() - lastFoundTrailTime > trailTimeout.get())
         {
             resetTrail();
@@ -462,7 +493,7 @@ public class TrailFollower extends Module
                 }
                 case DISCONNECT:
                 {
-                    mc.player.networkHandler.onDisconnect(new DisconnectS2CPacket(Text.literal("[TrailFollower] Trail timed out.")));
+                    mc.player.connection.handleDisconnect(new ClientboundDisconnectPacket(Component.literal("[TrailFollower] Trail timed out.")));
                     break;
                 }
             }
@@ -510,18 +541,18 @@ public class TrailFollower extends Module
 //                    }
                     //instead of flying to a calculated offset from the player using pathDistanceActual, will directly set the last trail chunk detected
                     baritoneSetGoalTicks = baritoneUpdateTicks.get();
-                    if (mc.world.getRegistryKey().equals(World.NETHER)) {
+                    if (mc.level.dimension().equals(Level.NETHER)) {
 
                         if (!trail.isEmpty()) {
-                            Vec3d baritoneTarget;
+                            Vec3 baritoneTarget;
                             if (netherPathMode.get() == NetherPathMode.AVERAGE) {
-                                Vec3d averagePos = calculateAveragePosition(trail);
-                                Vec3d directionVec = averagePos.subtract(mc.player.getPos()).normalize();
-                                Vec3d predictedPos = mc.player.getPos().add(directionVec.multiply(10));
+                                Vec3 averagePos = calculateAveragePosition(trail);
+                                Vec3 directionVec = averagePos.subtract(mc.player.position()).normalize();
+                                Vec3 predictedPos = mc.player.position().add(directionVec.scale(10));
                                 targetYaw = Rotations.getYaw(predictedPos);
-                                baritoneTarget = positionInDirection(mc.player.getPos(), targetYaw, pathDistanceActual);
+                                baritoneTarget = positionInDirection(mc.player.position(), targetYaw, pathDistanceActual);
                             } else {
-                                Vec3d lastPos = trail.getLast();
+                                Vec3 lastPos = trail.getLast();
                                 baritoneTarget = lastPos;
                             }
 
@@ -529,9 +560,11 @@ public class TrailFollower extends Module
                                 .setGoalAndPath(new GoalXZ((int) baritoneTarget.x, (int) baritoneTarget.z));
                         }
                     } else {
-                        // use average path for overworld
-                        Vec3d targetPos = positionInDirection(mc.player.getPos(), targetYaw, pathDistanceActual);
-                        BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(new GoalXZ((int) targetPos.x, (int) targetPos.z));
+                        // use average path for overworld with baritone elytra
+                        Vec3 targetPos = positionInDirection(mc.player.position(), targetYaw, pathDistanceActual);
+                        BaritoneAPI.getSettings().elytraTermsAccepted.value = true;
+                        BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoal(null);
+                        BaritoneAPI.getProvider().getPrimaryBaritone().getElytraProcess().pathTo(new GoalXZ((int) targetPos.x, (int) targetPos.z));
 
                         targetYaw = Rotations.getYaw(targetPos); // smooth rotation target
                     }
@@ -544,20 +577,20 @@ public class TrailFollower extends Module
                 break;
             }
             case YAWLOCK: {
-                mc.player.setYaw(Utils.smoothRotation(getActualYaw(mc.player.getYaw()), targetYaw, rotateScaling.get()));
+                mc.player.setYRot(Utils.smoothRotation(getActualYaw(mc.player.getYRot()), targetYaw, rotateScaling.get()));
                 break;
             }
         }
 
     }
 
-    Vec3d posDebug;
+    Vec3 posDebug;
 
     @EventHandler
     private void onRender(Render3DEvent event)
     {
         if (!debug.get()) return;
-        Vec3d targetPos = positionInDirection(mc.player.getPos(), targetYaw, 10);
+        Vec3 targetPos = positionInDirection(mc.player.position(), targetYaw, 10);
         // target line
         event.renderer.line(mc.player.getX(), mc.player.getY(), mc.player.getZ(), targetPos.x, targetPos.y, targetPos.z, new Color(255, 0, 0));
         // chunk
@@ -568,28 +601,28 @@ public class TrailFollower extends Module
     public void onChunkData(ChunkDataEvent event)
     {
         if (event.seenChunk()) return;
-        RegistryKey<World> currentDimension = mc.world.getRegistryKey();
-        WorldChunk chunk = event.chunk();
+        ResourceKey<Level> currentDimension = mc.level.dimension();
+        LevelChunk chunk = event.chunk();
         ChunkPos chunkPos = chunk.getPos();
-        long chunkLong = chunkPos.toLong();
+        long chunkLong = chunkPos.pack();
 
         // if found in the cache then ignore the chunk
         if (seenChunksCache.getIfPresent(chunkLong) != null) return;
 
-        ChunkPos chunkDelta = new ChunkPos(chunkPos.x - mc.player.getChunkPos().x, chunkPos.z - mc.player.getChunkPos().z);
+        ChunkPos chunkDelta = new ChunkPos(chunkPos.x() - mc.player.chunkPosition().x(), chunkPos.z() - mc.player.chunkPosition().z());
 
         if (oppositeDimension.get())
         {
-            if (currentDimension.equals(World.OVERWORLD))
+            if (currentDimension.equals(Level.OVERWORLD))
             {
-                chunkPos = new ChunkPos(mc.player.getChunkPos().x / 8 + chunkDelta.x, mc.player.getChunkPos().z / 8 + chunkDelta.z);
-                currentDimension = World.NETHER;
+                chunkPos = new ChunkPos(mc.player.chunkPosition().x() / 8 + chunkDelta.x(), mc.player.chunkPosition().z() / 8 + chunkDelta.z());
+                currentDimension = Level.NETHER;
             }
-            else if (currentDimension.equals(World.NETHER))
+            else if (currentDimension.equals(Level.NETHER))
             {
-                chunkPos = new ChunkPos(mc.player.getChunkPos().x * 8 + chunkDelta.x, mc.player.getChunkPos().z * 8 + chunkDelta.z);
+                chunkPos = new ChunkPos(mc.player.chunkPosition().x() * 8 + chunkDelta.x(), mc.player.chunkPosition().z() * 8 + chunkDelta.z());
 //                log("ChunkPos: " + chunkPos.x + ", " + chunkPos.z);
-                currentDimension = World.OVERWORLD;
+                currentDimension = Level.OVERWORLD;
             }
         }
         // Check that the chunk is actually mapped, and that it is an old chunk
@@ -603,7 +636,7 @@ public class TrailFollower extends Module
 
 
         // use chunk.getPos() here instead of the dimension specific chunkPos because we have to path to blocks in our dimension
-        Vec3d pos = chunk.getPos().getCenterAtY(0).toCenterPos();
+        Vec3 pos = Vec3.atCenterOf(chunk.getPos().getMiddleBlockPosition(0));
         posDebug = pos;
 
         if (!followingTrail)
@@ -671,53 +704,68 @@ public class TrailFollower extends Module
         // *fix for overworld smoothing
         if (!trail.isEmpty()) {
             if (followMode == FollowMode.YAWLOCK) {
-                Vec3d averagePos = calculateAveragePosition(trail);
-                Vec3d positionVec = averagePos.subtract(mc.player.getPos()).normalize();
-                Vec3d targetPos = mc.player.getPos().add(positionVec.multiply(10));
+                Vec3 averagePos = calculateAveragePosition(trail);
+                Vec3 positionVec = averagePos.subtract(mc.player.position()).normalize();
+                Vec3 targetPos = mc.player.position().add(positionVec.scale(10));
                 targetYaw = Rotations.getYaw(targetPos);
             } else {
-                Vec3d lastTrailPoint = trail.getLast();
+                Vec3 lastTrailPoint = trail.getLast();
                 targetYaw = Rotations.getYaw(lastTrailPoint);
             }
         }
     }
 
-    private boolean isValidChunk(ChunkPos chunkPos, RegistryKey<World> currentDimension)
+    private boolean isValidChunk(ChunkPos chunkPos, ResourceKey<Level> currentDimension)
     {
+        if (chunkSource.get() == ChunkSource.NewerNewChunks)
+        {
+            return isValidChunkNewerNewChunks(chunkPos, currentDimension);
+        }
+
         PaletteNewChunks paletteNewChunks = ModuleManager.getModule(PaletteNewChunks.class);
         boolean is119NewChunk = paletteNewChunks
             .isNewChunk(
-                chunkPos.x,
-                chunkPos.z,
+                chunkPos.x(),
+                chunkPos.z(),
                 currentDimension
             );
 
         boolean is112OldChunk = ModuleManager.getModule(OldChunks.class)
             .isOldChunk(
-                chunkPos.x,
-                chunkPos.z,
+                chunkPos.x(),
+                chunkPos.z(),
                 currentDimension
             );
 
         boolean isHighlighted = is119NewChunk || paletteNewChunks
             .isInverseNewChunk(
-                chunkPos.x,
-                chunkPos.z,
+                chunkPos.x(),
+                chunkPos.z(),
                 currentDimension
             );
 
         return isHighlighted && ((!is119NewChunk && !only112.get()) || is112OldChunk);
     }
 
+    private boolean isValidChunkNewerNewChunks(ChunkPos chunkPos, ResourceKey<Level> currentDimension)
+    {
+        boolean isNew = newerNewChunksData.isNewChunk(chunkPos.x(), chunkPos.z(), currentDimension);
+        boolean isInverse = newerNewChunksData.isInverseChunk(chunkPos.x(), chunkPos.z(), currentDimension);
+        boolean isOld = newerNewChunksData.isOldChunk(chunkPos.x(), chunkPos.z(), currentDimension);
+
+        boolean isHighlighted = isNew || isInverse;
+        return isHighlighted && ((!isNew && !only112.get()) || isOld);
+    }
+
     // not using this method now but will keep it in case
-    private Vec3d calculateAveragePosition(ArrayDeque<Vec3d> positions)
+    private Vec3 calculateAveragePosition(ArrayDeque<Vec3> positions)
     {
         double sumX = 0, sumZ = 0;
-        for (Vec3d pos : positions) {
+        for (Vec3 pos : positions) {
             sumX += pos.x;
             sumZ += pos.z;
         }
-        return new Vec3d(sumX / positions.size(), 0, sumZ / positions.size());
+        return new Vec3(sumX / positions.size(), 0, sumZ / positions.size());
     }
 
     private float getActualYaw(float yaw)
@@ -730,7 +778,7 @@ public class TrailFollower extends Module
         info(message);
         if (!webhookLink.get().isEmpty())
         {
-            sendWebhook(webhookLink.get(), "TrailFollower", message, null, mc.player.getGameProfile().getName());
+            sendWebhook(webhookLink.get(), "TrailFollower", message, null, mc.player.getGameProfile().name());
         }
     }
 

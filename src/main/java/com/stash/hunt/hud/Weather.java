@@ -8,12 +8,12 @@ import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.render.color.Color;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 
 public class Weather extends HudElement {
     public static final HudElementInfo<Weather> INFO = new HudElementInfo<>(Addon.HUD_GROUP, "Weather", "Displays current weather", Weather::new);
-    private MinecraftClient mc = null;
+    private Minecraft mc = null;
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private boolean recalculateSize;
 
@@ -28,7 +28,7 @@ public class Weather extends HudElement {
 
     public Weather() {
         super(INFO);
-        mc = MinecraftClient.getInstance();
+        mc = Minecraft.getInstance();
     }
 
     @Override
@@ -36,18 +36,12 @@ public class Weather extends HudElement {
         String textWidth = "Weather:            ";
         setSize(renderer.textWidth(textWidth, true, scale.get()), renderer.textHeight(true, scale.get()));
         String weather = "None";
-        if (mc.world != null && mc.world.getDimension().bedWorks())
-        {
-            if (mc.world.isThundering())
-            {
+        if (mc.level != null && mc.level.canHaveWeather()) {
+            if (mc.level.isThundering()) {
                 weather = "Thundering";
-            }
-            else if (mc.world.isRaining())
-            {
+            } else if (mc.level.isRaining()) {
                 weather = "Raining";
-            }
-            else
-            {
+            } else {
                 weather = "Clear";
             }
         }

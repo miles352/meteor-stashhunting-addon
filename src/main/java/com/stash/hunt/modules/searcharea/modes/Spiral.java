@@ -3,8 +3,8 @@ package com.stash.hunt.modules.searcharea.modes;
 import com.stash.hunt.modules.searcharea.SearchAreaMode;
 import com.stash.hunt.modules.searcharea.SearchAreaModes;
 import meteordevelopment.meteorclient.utils.player.Rotations;
-import net.minecraft.util.math.BlockPos;
-
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import java.io.*;
 
 import static com.stash.hunt.Utils.*;
@@ -29,7 +29,7 @@ public class Spiral extends SearchAreaMode
             File file = getJsonFile(super.toString());
             if (file == null || !file.exists())
             {
-                pd = new PathingDataSpiral(mc.player.getBlockPos(), mc.player.getBlockPos(), -90.0f, true, 0, 0);
+                pd = new PathingDataSpiral(mc.player.blockPosition(), mc.player.blockPosition(), -90.0f, true, 0, 0);
             }
             else
             {
@@ -67,7 +67,7 @@ public class Spiral extends SearchAreaMode
 
         if (System.nanoTime() < paused)
         {
-            setPressed(mc.options.forwardKey, false);
+            setPressed(mc.options.keyUp, false);
             return;
         }
 
@@ -75,21 +75,21 @@ public class Spiral extends SearchAreaMode
         if (goingToStart)
         {
 
-            if (Math.sqrt(mc.player.getBlockPos().getSquaredDistance(pd.currPos.getX(), mc.player.getY(), pd.currPos.getZ())) < 5)
+            if (Math.sqrt(mc.player.blockPosition().distToLowCornerSqr(pd.currPos.getX(), mc.player.getY(), pd.currPos.getZ())) < 5)
             {
                 goingToStart = false;
-                mc.player.setVelocity(0, 0, 0);
+                mc.player.setDeltaMovement(0, 0, 0);
             }
             else
             {
-                mc.player.setYaw((float) Rotations.getYaw(pd.currPos.toCenterPos()));
-                setPressed(mc.options.forwardKey, true);
+                mc.player.setYRot((float) Rotations.getYaw(Vec3.atCenterOf(pd.currPos)));
+                setPressed(mc.options.keyUp, true);
             }
             return;
         }
 
-        setPressed(mc.options.forwardKey, true);
-        mc.player.setYaw(pd.yawDirection);
+        setPressed(mc.options.keyUp, true);
+        mc.player.setYRot(pd.yawDirection);
         int blockGap = 16 * searchArea.rowGap.get();
         if (pd.mainPath && Math.abs(mc.player.getX() - pd.initialPos.getX()) >= (blockGap + pd.spiralWidth))
         {
@@ -97,7 +97,7 @@ public class Spiral extends SearchAreaMode
             pd.initialPos = new BlockPos((int)mc.player.getX(), pd.initialPos.getY(), pd.initialPos.getZ());
             pd.spiralWidth += blockGap;
             pd.mainPath = false;
-            mc.player.setVelocity(0, 0, 0);
+            mc.player.setDeltaMovement(0, 0, 0);
         }
         else if (!pd.mainPath && Math.abs(mc.player.getZ() - pd.initialPos.getZ()) >= (blockGap + pd.spiralHeight))
         {
@@ -105,7 +105,7 @@ public class Spiral extends SearchAreaMode
             pd.initialPos = new BlockPos(pd.initialPos.getX(), pd.initialPos.getY(), (int)mc.player.getZ());
             pd.spiralHeight += blockGap;
             pd.mainPath = true;
-            mc.player.setVelocity(0, 0, 0);
+            mc.player.setDeltaMovement(0, 0, 0);
         }
     }
 

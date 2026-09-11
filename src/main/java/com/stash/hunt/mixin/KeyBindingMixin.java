@@ -2,7 +2,7 @@ package com.stash.hunt.mixin;
 
 import com.stash.hunt.modules.ElytraFlyPlusPlus;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.KeyMapping;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -11,24 +11,23 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(KeyBinding.class)
+@Mixin(KeyMapping.class)
 public abstract class KeyBindingMixin {
 
     @Final
     @Shadow
-    private String translationKey;
+    private String name;
 
-    @Unique
-    ElytraFlyPlusPlus efly = null;
-
-    @Inject(at = @At("RETURN"), method = "isPressed", cancellable = true)
+    @Inject(at = @At("RETURN"), method = "isDown", cancellable = true)
     public void isPressed(CallbackInfoReturnable<Boolean> cir)
     {
-        // setting it beforehand caused a crash because meteor wasnt loaded yet
-        efly = efly == null ? Modules.get().get(ElytraFlyPlusPlus.class) : efly;
-        if (efly != null && efly.isActive() && efly.enabled() && translationKey.equals("key.forward"))
+        if (Modules.get() != null)
         {
-            cir.setReturnValue(true);
+            ElytraFlyPlusPlus efly = Modules.get().get(ElytraFlyPlusPlus.class);
+            if (efly != null && efly.isActive() && efly.enabled() && name.equals("key.forward"))
+            {
+                cir.setReturnValue(true);
+            }
         }
     }
 }

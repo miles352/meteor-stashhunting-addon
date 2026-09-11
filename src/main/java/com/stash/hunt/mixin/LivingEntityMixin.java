@@ -3,9 +3,11 @@ package com.stash.hunt.mixin;
 import com.stash.hunt.modules.ElytraFlyPlusPlus;
 import com.stash.hunt.modules.NoJumpDelay;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import net.minecraft.entity.*;
-import net.minecraft.entity.ai.brain.Brain;
-import net.minecraft.world.World;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.Brain;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -20,9 +22,9 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 public abstract class LivingEntityMixin extends Entity
 {
     @Shadow
-    private int jumpingCooldown;
+    private int noJumpDelay;
 
-    public LivingEntityMixin(EntityType<?> type, World world) {
+    public LivingEntityMixin(EntityType<?> type, Level world) {
         super(type, world);
     }
 
@@ -30,16 +32,16 @@ public abstract class LivingEntityMixin extends Entity
     public abstract Brain<?> getBrain();
 
     @Unique
-    NoJumpDelay noJumpDelay = Modules.get().get(NoJumpDelay.class);
+    NoJumpDelay noJumpDelay_0 = Modules.get().get(NoJumpDelay.class);
     @Unique
     ElytraFlyPlusPlus efly = Modules.get().get(ElytraFlyPlusPlus.class);
 
-    @Inject(at = @At("HEAD"), method = "tickMovement()V")
+    @Inject(at = @At("HEAD"), method = "aiStep()V")
     private void tickMovement(CallbackInfo ci)
     {
-        if (mc.player != null && mc.player.getBrain().equals(this.getBrain()) && (efly != null && efly.enabled()) || (noJumpDelay != null && noJumpDelay.isActive()))
+        if (mc.player != null && mc.player.getBrain().equals(this.getBrain()) && (efly != null && efly.enabled()) || (noJumpDelay_0 != null && noJumpDelay_0.isActive()))
         {
-            this.jumpingCooldown = 0;
+            this.noJumpDelay = 0;
         }
     }
 
