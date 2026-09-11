@@ -7,9 +7,8 @@ import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
 import java.util.*;
 
 public class EntityList extends HudElement {
@@ -71,11 +70,11 @@ public class EntityList extends HudElement {
     @Override
     public void render(HudRenderer renderer) {
         entityCounts.clear();
-        MinecraftClient mc = MinecraftClient.getInstance();
+        Minecraft mc = Minecraft.getInstance();
 
-        if (mc.world == null || mc.player == null) return;
+        if (mc.level == null || mc.player == null) return;
 
-        for (Entity e : mc.world.getEntities()) {
+        for (Entity e : mc.level.entitiesForRendering()) {
             if (e == mc.player || e.isRemoved()) continue;
 
             String name = e.getName().getString();

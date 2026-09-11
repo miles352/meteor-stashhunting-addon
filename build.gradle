@@ -1,9 +1,11 @@
 plugins {
-    id "fabric-loom" version "1.8-SNAPSHOT"
+    id 'net.fabricmc.fabric-loom' version '1.17.+'
 }
 
 
-archivesBaseName = project.archives_base_name
+base {
+    archivesName = project.archives_base_name
+}
 version = project.mod_version
 minecraft_version = project.minecraft_version
 group = project.maven_group
@@ -37,22 +39,28 @@ loom {
 dependencies {
     // Fabric
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     // Meteor
-    modImplementation "meteordevelopment:meteor-client:${project.meteor_version}"
+    implementation "meteordevelopment:meteor-client:${project.meteor_version}"
+    // Fabric API resource loader (compile only - the merged game jar has MinecraftServer implement DataResourceStore)
+    compileOnly "net.fabricmc.fabric-api:fabric-resource-loader-v1:2.0.13+9edec1269e"
     // XaeroPlus
-    modImplementation "maven.modrinth:xaeroplus:${project.xaeroplus_version}"
+    implementation "maven.modrinth:xaeroplus:${project.xaeroplus_version}"
     // XaeroWorldMap
-    modImplementation "maven.modrinth:xaeros-world-map:${project.xaeros_worldmap_version}"
+    implementation "maven.modrinth:xaeros-world-map:${project.xaeros_worldmap_version}"
     // XaeroMinimap
-    modImplementation "maven.modrinth:xaeros-minimap:${project.xaeros_minimap_version}"
+    implementation "maven.modrinth:xaeros-minimap:${project.xaeros_minimap_version}"
     // lenni
-    modImplementation "net.lenni0451:LambdaEvents:2.4.2"
-    modImplementation "com.github.ben-manes.caffeine:caffeine:3.1.8"
+    implementation "net.lenni0451:LambdaEvents:2.4.2"
+    implementation "com.github.ben-manes.caffeine:caffeine:3.1.8"
 
-    modCompileOnly "meteordevelopment:baritone:${project.baritone_version}"
+    compileOnly "meteordevelopment:baritone:${project.baritone_version}"
+}
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
 }
 
 processResources {

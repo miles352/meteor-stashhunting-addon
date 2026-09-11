@@ -7,10 +7,6 @@ import com.google.gson.GsonBuilder;
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.game.OpenScreenEvent;
 import meteordevelopment.orbit.EventPriority;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.gui.screen.DeathScreen;
-import net.minecraft.util.math.Vec3d;
 import xaero.common.minimap.waypoints.Waypoint;
 import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -25,12 +21,25 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.render.MeteorToast;
-import net.minecraft.block.entity.*;
-import net.minecraft.item.Items;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.world.World;
+import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.CrafterBlockEntity;
+import net.minecraft.world.level.block.entity.DispenserBlockEntity;
+import net.minecraft.world.level.block.entity.EnderChestBlockEntity;
+import net.minecraft.world.level.block.entity.HopperBlockEntity;
+import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
+import net.minecraft.world.phys.Vec3;
 import xaero.hud.minimap.BuiltInHudModules;
 import xaero.hud.minimap.module.MinimapSession;
 import xaero.hud.minimap.waypoint.set.WaypointSet;
@@ -181,7 +190,7 @@ public class BetterStashFinder extends Module
         super(Addon.CATEGORY, "better-stash-finder", "Meteors StashFinder but with more features.");
     }
 
-    private Vec3d lastPosition = null;
+    private Vec3 lastPosition = null;
 
     @Override
     public void onActivate() {
@@ -199,27 +208,27 @@ public class BetterStashFinder extends Module
     public void onChunkData(ChunkDataEvent event) {
         if (event.seenChunk()) return;
         // Check the distance.
-        double chunkXAbs = Math.abs(event.chunk().getPos().x * 16);
-        double chunkZAbs = Math.abs(event.chunk().getPos().z * 16);
+        double chunkXAbs = Math.abs(event.chunk().getPos().x() * 16);
+        double chunkZAbs = Math.abs(event.chunk().getPos().z() * 16);
         if (Math.sqrt(chunkXAbs * chunkXAbs + chunkZAbs * chunkZAbs) < minimumDistance.get()) return;
 
         Chunk chunk = new Chunk(event.chunk().getPos());
 
-        RegistryKey<World> currentDimension = mc.world.getRegistryKey();
+        ResourceKey<Level> currentDimension = mc.level.dimension();
 
         ChunkPos chunkPos = chunk.chunkPos;
         PaletteNewChunks paletteNewChunks = ModuleManager.getModule(PaletteNewChunks.class);
         boolean is119NewChunk = paletteNewChunks
             .isNewChunk(
-                chunkPos.x,
-                chunkPos.z,
+                chunkPos.x(),
+                chunkPos.z(),
                 currentDimension
             );
 
         boolean is112OldChunk = ModuleManager.getModule(OldChunks.class)
             .isOldChunk(
-                chunkPos.x,
-                chunkPos.z,
+                chunkPos.x(),
+                chunkPos.z(),
                 currentDimension
             );
 
@@ -229,10 +238,10 @@ public class BetterStashFinder extends Module
         for (BlockEntity blockEntity : event.chunk().getBlockEntities().values()) {
             if (!storageBlocks.get().contains(blockEntity.getType())) continue;
 
-            Block blockUnder = mc.world.getBlockState(blockEntity.getPos().down()).getBlock();
-            if (ignoreTrialChambers.get() && blockUnder.equals(Blocks.WAXED_OXIDIZED_CUT_COPPER) ||
-                blockUnder.equals(Blocks.TUFF_BRICKS) || blockUnder.equals(Blocks.WAXED_COPPER_BLOCK) ||
-                blockUnder.equals(Blocks.WAXED_OXIDIZED_COPPER))
+            Block blockUnder = mc.level.getBlockState(blockEntity.getBlockPos().below()).getBlock();
+            if (ignoreTrialChambers.get() && blockUnder.equals(Blocks.CUT_COPPER.waxed().oxidized()) ||
+                blockUnder.equals(Blocks.TUFF_BRICKS) || blockUnder.equals(Blocks.COPPER_BLOCK.waxed().unaffected()) ||
+                blockUnder.equals(Blocks.COPPER_BLOCK.waxed().oxidized()))
             {
                 continue;
             }
@@ -263,10 +272,14 @@ public class BetterStashFinder extends Module
                     switch (notificationMode.get())
                     {
                         case Chat -> info("Found stash at (highlight)%s(default), (highlight)%s(default).", chunk.x, chunk.z);
-                        case Toast -> mc.getToastManager().add(new MeteorToast(Items.CHEST, title, "Found Stash!"));
+                        case Toast -> {
+                            MeteorToast toast = new MeteorToast.Builder(title).icon(Items.CHEST).text("Found Stash!").build();
+                            mc.gui.toastManager().addToast(toast);
+                        }
                         case Both -> {
                             info("Found stash at (highlight)%s(default), (highlight)%s(default).", chunk.x, chunk.z);
-                            mc.getToastManager().add(new MeteorToast(Items.CHEST, title, "Found Stash!"));
+                            MeteorToast toast = new MeteorToast.Builder(title).icon(Items.CHEST).text("Found Stash!").build();
+                            mc.gui.toastManager().addToast(toast);
                         }
                     }
                 }
@@ -333,7 +346,7 @@ public class BetterStashFinder extends Module
                     else
                     {
                         String message = "Found stash at " + chunk.x + ", " + chunk.z + ".";
-                        new Thread(() -> sendWebhook(webhookLink.get(), title, message, ping.get() ? discordId.get() : null, mc.player.getGameProfile().getName())).start();
+                        new Thread(() -> sendWebhook(webhookLink.get(), title, message, ping.get() ? discordId.get() : null, mc.player.getGameProfile().name())).start();
                     }
                 }
 
@@ -379,7 +392,7 @@ public class BetterStashFinder extends Module
             table.add(theme.label("Total: " + chunk.getTotal()));
 
             WButton open = table.add(theme.button("Open")).widget();
-            open.action = () -> mc.setScreen(new ChunkScreen(theme, chunk));
+            open.action = () -> mc.gui.setScreen(new ChunkScreen(theme, chunk));
 
             WButton gotoBtn = table.add(theme.button("Goto")).widget();
             gotoBtn.action = () -> PathManagers.get().moveTo(new BlockPos(chunk.x, 0, chunk.z), true);
@@ -614,8 +627,8 @@ public class BetterStashFinder extends Module
         }
 
         public void calculatePos() {
-            x = chunkPos.x * 16 + 8;
-            z = chunkPos.z * 16 + 8;
+            x = chunkPos.x() * 16 + 8;
+            z = chunkPos.z() * 16 + 8;
         }
 
         public int getTotal() {
@@ -715,8 +728,8 @@ public class BetterStashFinder extends Module
     private void onPlayerMove(PlayerMoveEvent event) {
         if (lastPosition != null)
         {
-            if (disableOnTeleport.get() && mc.player.squaredDistanceTo(lastPosition) > 16 * 16) this.toggle();
+            if (disableOnTeleport.get() && mc.player.distanceToSqr(lastPosition) > 16 * 16) this.toggle();
         }
-        lastPosition = mc.player.getPos();
+        lastPosition = mc.player.position();
     }
 }

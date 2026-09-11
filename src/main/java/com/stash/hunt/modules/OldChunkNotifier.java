@@ -3,10 +3,9 @@ package com.stash.hunt.modules;
 import com.stash.hunt.Addon;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import net.minecraft.registry.RegistryKey;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import xaero.hud.minimap.BuiltInHudModules;
 import xaero.hud.minimap.module.MinimapSession;
 import xaero.hud.minimap.waypoint.set.WaypointSet;
@@ -159,12 +158,12 @@ public class OldChunkNotifier extends Module {
         if (event.seenChunk()) return;
 
         // avoid 2b2t end loading screen
-        if (mc.player.getAbilities().allowFlying) return;
+        if (mc.player.getAbilities().mayfly) return;
 
         // Check selected dimension mode
-        if ((dimensionMode.get() == DimensionMode.Nether && mc.world.getRegistryKey() != World.NETHER) ||
-            (dimensionMode.get() == DimensionMode.End && mc.world.getRegistryKey() != World.END) ||
-            (dimensionMode.get() == DimensionMode.Overworld && mc.world.getRegistryKey() != World.OVERWORLD)) return;
+        if ((dimensionMode.get() == DimensionMode.Nether && mc.level.dimension() != Level.NETHER) ||
+            (dimensionMode.get() == DimensionMode.End && mc.level.dimension() != Level.END) ||
+            (dimensionMode.get() == DimensionMode.Overworld && mc.level.dimension() != Level.OVERWORLD)) return;
 
         if (oldChunks.size() > 1000) {
             oldChunks.removeFirst();
@@ -175,16 +174,16 @@ public class OldChunkNotifier extends Module {
 
         boolean is119NewChunk = ModuleManager.getModule(PaletteNewChunks.class)
             .isNewChunk(
-                event.chunk().getPos().x,
-                event.chunk().getPos().z,
-                event.chunk().getWorld().getRegistryKey()
+                event.chunk().getPos().x(),
+                event.chunk().getPos().z(),
+                event.chunk().getLevel().dimension()
             );
 
         boolean is112OldChunk = ModuleManager.getModule(OldChunks.class)
             .isOldChunk(
-                event.chunk().getPos().x,
-                event.chunk().getPos().z,
-                event.chunk().getWorld().getRegistryKey()
+                event.chunk().getPos().x(),
+                event.chunk().getPos().z(),
+                event.chunk().getLevel().dimension()
             );
 
         // Check chunk type filtering
@@ -209,7 +208,7 @@ public class OldChunkNotifier extends Module {
         {
             if (logType.get() == LogType.Both || logType.get() == LogType.Marker)
             {
-                createMapMarker(event.chunk().getPos().x, event.chunk().getPos().z);
+                createMapMarker(event.chunk().getPos().x(), event.chunk().getPos().z());
             }
             if (logType.get() == LogType.Both || logType.get() == LogType.Webhook)
             {
@@ -224,26 +223,26 @@ public class OldChunkNotifier extends Module {
                 String finalMessage = message; // must be final for thread operations
                 // use threads so if a ton of chunks come at once it doesnt lag the game
                 String discordID = !ping.get() || discordId.get().isBlank() ? null : discordId.get();
-                new Thread(() -> sendWebhook(webhookLink.get(), "Old Chunk Detected", finalMessage + " at " + mc.player.getPos().toString(), discordID, mc.player.getGameProfile().getName())).start();
+                new Thread(() -> sendWebhook(webhookLink.get(), "Old Chunk Detected", finalMessage + " at " + mc.player.position().toString(), discordID, mc.player.getGameProfile().name())).start();
             }
         }
 
         if (notifyOffHighway.get())
         {
             ChunkPos chunkPos = event.chunk().getPos();
-            Vec3d direction = yawToDirection(directionOfTravel.get());
-            ChunkPos playerChunkPos = mc.player.getChunkPos();
-            double distance = distancePointToDirection(new Vec3d(chunkPos.x, 0, chunkPos.z), direction, new Vec3d(playerChunkPos.x, 0, playerChunkPos.z));
+            Vec3 direction = yawToDirection(directionOfTravel.get());
+            ChunkPos playerChunkPos = mc.player.chunkPosition();
+            double distance = distancePointToDirection(new Vec3(chunkPos.x(), 0, chunkPos.z()), direction, new Vec3(playerChunkPos.x(), 0, playerChunkPos.z()));
             if (distance > distanceOffAxis.get())
             {
                 if (logType.get() == LogType.Both || logType.get() == LogType.Marker)
                 {
-                    createMapMarker(chunkPos.x, chunkPos.z);
+                    createMapMarker(chunkPos.x(), chunkPos.z());
                 }
                 if (logType.get() == LogType.Both || logType.get() == LogType.Webhook)
                 {
                     String discordID = !ping.get() || discordId.get().isBlank() ? null : discordId.get();
-                    new Thread(() -> sendWebhook(webhookLink.get(), "Old Chunk Detected", "Old chunk detected off the highway at " + chunkPos.x * 16 + " " + chunkPos.z * 16, discordID, mc.player.getGameProfile().getName())).start();
+                    new Thread(() -> sendWebhook(webhookLink.get(), "Old Chunk Detected", "Old chunk detected off the highway at " + chunkPos.x() * 16 + " " + chunkPos.z() * 16, discordID, mc.player.getGameProfile().name())).start();
                 }
             }
         }

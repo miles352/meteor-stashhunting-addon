@@ -8,16 +8,16 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.WallBannerBlock;
-import net.minecraft.block.BannerBlock;
-import net.minecraft.block.entity.BannerBlockEntity;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.level.block.BannerBlock;
+import net.minecraft.world.level.block.WallBannerBlock;
+import net.minecraft.world.level.block.entity.BannerBlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.AABB;
 
 public class VanityESP extends Module {
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -71,19 +71,19 @@ public class VanityESP extends Module {
 
     @EventHandler
     private void onRender(Render3DEvent event) {
-        if (mc.world == null || mc.player == null) return;
+        if (mc.level == null || mc.player == null) return;
 
         if (highlightItemFrames.get()) {
-            for (ItemFrameEntity frame : mc.world.getEntitiesByClass(ItemFrameEntity.class, mc.player.getBoundingBox().expand(64),
-                e -> e.getHeldItemStack().getItem().getTranslationKey().equals("item.minecraft.filled_map"))) {
+            for (ItemFrame frame : mc.level.getEntitiesOfClass(ItemFrame.class, mc.player.getBoundingBox().inflate(64),
+                e -> e.getItem().getItem().getDescriptionId().equals("item.minecraft.filled_map"))) {
 
                 // fixed mapart on-ground rendering bug
-                Box box;
-                float pitch = frame.getPitch();
+                AABB box;
+                float pitch = frame.getXRot();
                 if (pitch == 90 || pitch == -90) {
-                    box = frame.getBoundingBox().expand(0.12, 0.01, 0.12);
+                    box = frame.getBoundingBox().inflate(0.12, 0.01, 0.12);
                 } else {
-                    box = frame.getBoundingBox().expand(0.12, 0.12, 0.01);
+                    box = frame.getBoundingBox().inflate(0.12, 0.12, 0.01);
                 }
 
                 Color fill = new Color(mapColor.get());
@@ -94,25 +94,25 @@ public class VanityESP extends Module {
     // redid shaderbox rendering, 4 wall mount facing directions, 4 standing facing directions
         if (highlightBanners.get()) {
             int radius = 8;
-            BlockPos playerPos = mc.player.getBlockPos();
+            BlockPos playerPos = mc.player.blockPosition();
 
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
-                    WorldChunk chunk = mc.world.getChunk(playerPos.getX() / 16 + dx, playerPos.getZ() / 16 + dz);
+                    LevelChunk chunk = mc.level.getChunk(playerPos.getX() / 16 + dx, playerPos.getZ() / 16 + dz);
                     if (chunk == null) continue;
 
                     for (BlockEntity be : chunk.getBlockEntities().values()) {
                         if (!(be instanceof BannerBlockEntity banner)) continue;
 
-                        BlockPos pos = banner.getPos();
-                        BlockState state = mc.world.getBlockState(pos);
-                        Box box;
+                        BlockPos pos = banner.getBlockPos();
+                        BlockState state = mc.level.getBlockState(pos);
+                        AABB box;
 
                         Color fill = new Color(bannerColor.get());
                         Color outline = new Color(bannerOutline.get());
 
-                        if (state.contains(WallBannerBlock.FACING)) {
-                            Direction facing = state.get(WallBannerBlock.FACING);
+                        if (state.hasProperty(WallBannerBlock.FACING)) {
+                            Direction facing = state.getValue(WallBannerBlock.FACING);
                             double centerX = pos.getX() + 0.5;
                             double centerZ = pos.getZ() + 0.5;
                             double offset = 0.1;
@@ -123,24 +123,24 @@ public class VanityESP extends Module {
 
                             switch (facing) {
                                 case NORTH:
-                                    box = new Box(centerX - width, y1, pos.getZ() + 1 - offset - depth, centerX + width, y2, pos.getZ() + 1 - offset);
+                                    box = new AABB(centerX - width, y1, pos.getZ() + 1 - offset - depth, centerX + width, y2, pos.getZ() + 1 - offset);
                                     break;
                                 case SOUTH:
-                                    box = new Box(centerX - width, y1, pos.getZ() + offset, centerX + width, y2, pos.getZ() + offset + depth);
+                                    box = new AABB(centerX - width, y1, pos.getZ() + offset, centerX + width, y2, pos.getZ() + offset + depth);
                                     break;
                                 case WEST:
-                                    box = new Box(pos.getX() + 1 - offset - depth, y1, centerZ - width, pos.getX() + 1 - offset, y2, centerZ + width);
+                                    box = new AABB(pos.getX() + 1 - offset - depth, y1, centerZ - width, pos.getX() + 1 - offset, y2, centerZ + width);
                                     break;
                                 case EAST:
-                                    box = new Box(pos.getX() + offset, y1, centerZ - width, pos.getX() + offset + depth, y2, centerZ + width);
+                                    box = new AABB(pos.getX() + offset, y1, centerZ - width, pos.getX() + offset + depth, y2, centerZ + width);
                                     break;
                                 default:
                                     continue;
                             }
 
                             event.renderer.box(box, fill, outline, ShapeMode.Both, 0);
-                        } else if (state.contains(BannerBlock.ROTATION)) {
-                            int rotation = state.get(BannerBlock.ROTATION);
+                        } else if (state.hasProperty(BannerBlock.ROTATION)) {
+                            int rotation = state.getValue(BannerBlock.ROTATION);
                             double centerX = pos.getX() + 0.5;
                             double centerZ = pos.getZ() + 0.5;
                             double y1 = pos.getY();
@@ -149,14 +149,14 @@ public class VanityESP extends Module {
                             if (rotation == 0 || rotation == 8) {
                                 double width = 0.45;
                                 double depth = 0.03;
-                                box = new Box(centerX - width, y1, centerZ - depth, centerX + width, y2, centerZ + depth);
+                                box = new AABB(centerX - width, y1, centerZ - depth, centerX + width, y2, centerZ + depth);
                             } else if (rotation == 4 || rotation == 12) {
                                 double width = 0.03;
                                 double depth = 0.45;
-                                box = new Box(centerX - width, y1, centerZ - depth, centerX + width, y2, centerZ + depth);
+                                box = new AABB(centerX - width, y1, centerZ - depth, centerX + width, y2, centerZ + depth);
                             } else {
                                 double size = 0.3;
-                                box = new Box(centerX - size, y1, centerZ - size, centerX + size, y2, centerZ + size);
+                                box = new AABB(centerX - size, y1, centerZ - size, centerX + size, y2, centerZ + size);
                             }
 
                             event.renderer.box(box, fill, outline, ShapeMode.Both, 0);

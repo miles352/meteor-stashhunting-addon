@@ -9,11 +9,12 @@ import meteordevelopment.meteorclient.systems.modules.misc.AutoReconnect;
 import meteordevelopment.meteorclient.utils.player.SlotUtils;
 import meteordevelopment.meteorclient.utils.world.TickRate;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.item.Items;
-import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket;
-import net.minecraft.text.Text;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.ClientboundDisconnectPacket;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 
 public class AutoLogPlus extends Module
 {
@@ -173,7 +174,7 @@ public class AutoLogPlus extends Module
     private void onTick(TickEvent.Post event)
     {
         // If in the 2b2t queue
-        if (mc.player == null || mc.player.getAbilities().allowFlying) return;
+        if (mc.player == null || mc.player.getAbilities().mayfly) return;
 
         if (serverNotResponding.get() && !waitingForReconnection)
         {
@@ -197,9 +198,9 @@ public class AutoLogPlus extends Module
             }
         }
 
-        if (logPortal.get() && mc.player.portalManager != null)
+        if (logPortal.get() && mc.player.portalProcess != null)
         {
-            if (mc.player.portalManager.isInPortal())
+            if (mc.player.portalProcess.isInsidePortalThisTick())
             {
                 currPortalTicks++;
                 if (currPortalTicks > portalTicks.get())
@@ -223,12 +224,12 @@ public class AutoLogPlus extends Module
         {
             for (int i = 0; i < 4; i++)
             {
-                ItemStack armorPiece = mc.player.getInventory().getStack(SlotUtils.ARMOR_START + i);
+                ItemStack armorPiece = mc.player.getInventory().getItem(SlotUtils.ARMOR_START + i);
                 if (ignoreElytra.get() && armorPiece.getItem() == Items.ELYTRA) continue;
-                if (armorPiece.isDamageable())
+                if (armorPiece.isDamageableItem())
                 {
                     int max = armorPiece.getMaxDamage();
-                    int current = armorPiece.getDamage();
+                    int current = armorPiece.getDamageValue();
                     double percentUndamaged = 100 - ((double) current / max) * 100;
                     if (percentUndamaged < armorPercent.get())
                     {
@@ -240,7 +241,7 @@ public class AutoLogPlus extends Module
         }
         if (logPosition.get())
         {
-            double distanceToTarget = mc.player.getPos().multiply(1,0,1).distanceTo(position.get().toCenterPos().multiply(1,0,1));
+            double distanceToTarget = mc.player.position().multiply(1,0,1).distanceTo(Vec3.atCenterOf(position.get()).multiply(1,0,1));
             if (distanceToTarget < distance.get())
             {
                 logOut("Player was within " + distanceToTarget + " blocks of the target position.", true);
@@ -262,11 +263,11 @@ public class AutoLogPlus extends Module
 
         if (illegalDisconnect.get())
         {
-            mc.player.networkHandler.sendChatMessage(String.valueOf((char)0));
+            mc.player.connection.sendChat(String.valueOf((char)0));
         }
         else
         {
-            mc.player.networkHandler.onDisconnect(new DisconnectS2CPacket(Text.literal("[AutoLogPlus] " + reason)));
+            mc.player.connection.handleDisconnect(new ClientboundDisconnectPacket(Component.literal("[AutoLogPlus] " + reason)));
         }
     }
 }

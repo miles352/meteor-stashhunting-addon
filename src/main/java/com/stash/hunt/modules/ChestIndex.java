@@ -15,34 +15,34 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.RenderUtils;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.meteorclient.utils.world.BlockIterator;
+import meteordevelopment.meteorclient.utils.misc.Names;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.block.*;
-import net.minecraft.block.enums.ChestType;
-import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import com.google.gson.JsonObject;
 import java.io.IOException;
 
 import com.google.gson.*;
-import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
-
 
 import static meteordevelopment.meteorclient.utils.Utils.getItemsInContainerItem;
 import static meteordevelopment.meteorclient.utils.Utils.hasItems;
@@ -207,10 +207,10 @@ public class ChestIndex extends Module
                     Identifier identifier = Identifier.tryParse(entry.getKey());
 
                     // Get the item from the registry
-                    Item item = Registries.ITEM.get(identifier);
+                    Item item = BuiltInRegistries.ITEM.getValue(identifier);
 
                     // Get the display name (human-readable)
-                    String displayName = item.getName().getString();
+                    String displayName = Names.get(item);
                     json.add(displayName, new JsonPrimitive(entry.getValue()));
                 }
                 saveToJson(gson, "blocks_name", json);
@@ -232,13 +232,13 @@ public class ChestIndex extends Module
                     Identifier identifier = Identifier.tryParse(entry.getKey());
 
                     // Get the item from the registry
-                    Item item = Registries.ITEM.get(identifier);
+                    Item item = BuiltInRegistries.ITEM.getValue(identifier);
 
                     // Get the display name (human-readable)
-                    String displayName = item.getName().getString();
+                    String displayName = Names.get(item);
 
                     // Calculate stack size
-                    int stackSize = item.getMaxCount();
+                    int stackSize = item.getDefaultMaxStackSize();
 
                     // Correct calculation for Dubs (shulkers full of items in dubs)
                     double dubs = entry.getValue() / (stackSize * 27.0 * 54.0); // 1458 slots per double chest
@@ -265,13 +265,13 @@ public class ChestIndex extends Module
                         Identifier identifier = Identifier.tryParse(entry.getKey());
 
                         // Get the item from the registry
-                        Item item = Registries.ITEM.get(identifier);
+                        Item item = BuiltInRegistries.ITEM.getValue(identifier);
 
                         // Get the display name (human-readable)
-                        String displayName =item.getName().getString();
+                        String displayName = Names.get(item);
 
                         // Calculate stack size
-                        int stackSize = item.getMaxCount();
+                        int stackSize = item.getDefaultMaxStackSize();
 
                         // Correct calculation for Shulkers
                         double shulkers = entry.getValue() / (stackSize * 27.0); // 27 slots per shulker
@@ -299,7 +299,7 @@ public class ChestIndex extends Module
         if (highlightSearched.get()){
             for (BlockPos blockPos : searched)
             {
-                RenderUtils.renderTickingBlock(blockPos.toImmutable(), sideColor.get(), lineColor.get(), shapeMode.get(), 0, 8, true, false);
+                RenderUtils.renderTickingBlock(blockPos.immutable(), sideColor.get(), lineColor.get(), shapeMode.get(), 0, 8, true, false);
             }
         }
     }
@@ -321,7 +321,7 @@ public class ChestIndex extends Module
     @EventHandler
     private void onTick(TickEvent.Pre event)
     {
-        if (mc.currentScreen instanceof GenericContainerScreen) return;
+        if (mc.gui.screen() instanceof ContainerScreen) return;
 
         if (tickCounter < delay.get())
         {
@@ -338,7 +338,7 @@ public class ChestIndex extends Module
         {
             // might be too many packets from not checking if menu already open
             if (!awaiting &&
-                !searched.contains(blockPos.toImmutable()) &&
+                !searched.contains(blockPos.immutable()) &&
                 (blockState.getBlock() == Blocks.CHEST ||
                     blockState.getBlock() == Blocks.TRAPPED_CHEST ||
                     blockState.getBlock() == Blocks.BARREL ||
@@ -348,22 +348,22 @@ public class ChestIndex extends Module
 
 
 
-                Vec3d vec = new Vec3d(blockPos.getX(), blockPos.getY(), blockPos.getZ());
+                Vec3 vec = new Vec3(blockPos.getX(), blockPos.getY(), blockPos.getZ());
                 BlockHitResult hitResult = new BlockHitResult(vec, Direction.UP, blockPos, false);
-                if (mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hitResult) == ActionResult.SUCCESS)
+                if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hitResult) == InteractionResult.SUCCESS)
                 {
                     awaiting = true;
-                    mc.player.swingHand(Hand.MAIN_HAND);
+                    mc.player.swing(InteractionHand.MAIN_HAND);
                     // find way to see when the interaction fails
                     info("interacted");
-                    currPos[0] = blockPos.toImmutable();
+                    currPos[0] = blockPos.immutable();
                     if (blockState.getBlock() == Blocks.CHEST || blockState.getBlock() == Blocks.TRAPPED_CHEST)
                     {
-                        ChestType chestType = blockState.get(ChestBlock.CHEST_TYPE);
+                        ChestType chestType = blockState.getValue(ChestBlock.TYPE);
                         if (chestType == ChestType.LEFT || chestType == ChestType.RIGHT)
                         {
-                            Direction facing = blockState.get(ChestBlock.FACING);
-                            BlockPos otherPartPos = blockPos.offset(chestType == ChestType.LEFT ? facing.rotateYClockwise() : facing.rotateYCounterclockwise());
+                            Direction facing = blockState.getValue(ChestBlock.FACING);
+                            BlockPos otherPartPos = blockPos.relative(chestType == ChestType.LEFT ? facing.getClockWise() : facing.getCounterClockWise());
 
                             currPos[1] = otherPartPos;
                         }
@@ -374,16 +374,16 @@ public class ChestIndex extends Module
     }
     @EventHandler
     private void onInventory(InventoryEvent event) {
-        ScreenHandler handler = mc.player.currentScreenHandler;
+        AbstractContainerMenu handler = mc.player.containerMenu;
         awaiting = false;
         for (BlockPos blockPos : currPos)
         {
             if (blockPos != null) searched.add(blockPos);
         }
-        DefaultedList<Slot> slots = handler.slots;
+        NonNullList<Slot> slots = handler.slots;
         for (int i = 0; i < slots.size() - 36; i++)
         {
-            ItemStack stack = slots.get(i).getStack();
+            ItemStack stack = slots.get(i).getItem();
             if (!stack.isEmpty())
             {
 
@@ -408,7 +408,7 @@ public class ChestIndex extends Module
 
             }
         }
-        mc.player.closeHandledScreen();
+        mc.player.closeContainer();
     }
 
     private enum DisplayType

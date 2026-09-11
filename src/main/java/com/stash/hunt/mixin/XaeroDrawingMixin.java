@@ -2,7 +2,7 @@ package com.stash.hunt.mixin;
 
 import com.stash.hunt.modules.TrailMaker;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;

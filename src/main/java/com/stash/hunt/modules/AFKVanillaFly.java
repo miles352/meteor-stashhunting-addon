@@ -12,7 +12,7 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.item.Items;
+import net.minecraft.world.item.Items;
 
 public class AFKVanillaFly extends Module {
     private long lastRocketUse = 0;
@@ -98,16 +98,16 @@ public class AFKVanillaFly extends Module {
                 targetPitch = 0f;
             }
 
-            float currentPitch = mc.player.getPitch();
+            float currentPitch = mc.player.getXRot();
             float pitchDiff = targetPitch - currentPitch;
-            mc.player.setPitch(currentPitch + pitchDiff * 0.1f);
+            mc.player.setXRot(currentPitch + pitchDiff * 0.1f);
 
             if (System.currentTimeMillis() - lastRocketUse > fireworkDelay.get()) {
                 tryUseFirework();
             }
         } else {
             if (!launched) {
-                mc.player.jump();
+                mc.player.jumpFromGround();
                 launched = true;
             } else if (System.currentTimeMillis() - lastRocketUse > 1000) {
                 tryUseFirework();
@@ -149,7 +149,7 @@ public class AFKVanillaFly extends Module {
 
     private int findEmptyHotbarSlot() {
         for (int i = 0; i < 9; i++) {
-            if (mc.player.getInventory().getStack(i).isEmpty()) return i;
+            if (mc.player.getInventory().getItem(i).isEmpty()) return i;
         }
         return -1;
     }
